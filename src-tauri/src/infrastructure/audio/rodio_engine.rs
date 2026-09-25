@@ -8,7 +8,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub struct AudioEngine {
-    _stream: OutputStream,
     stream_handle: OutputStreamHandle,
     sink: Arc<parking_lot::Mutex<Sink>>,
     is_paused: Arc<AtomicBool>,
@@ -21,8 +20,14 @@ impl AudioEngine {
         let sink = Sink::try_new(&stream_handle)
             .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
+        std::thread::spawn(move || {
+            let _keep_alive = stream;
+            loop {
+                std::thread::park();
+            }
+        });
+
         Ok(Self {
-            _stream: stream,
             stream_handle,
             sink: Arc::new(parking_lot::Mutex::new(sink)),
             is_paused: Arc::new(AtomicBool::new(false)),

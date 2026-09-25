@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
@@ -35,11 +35,14 @@ impl SmtcService {
                 hwnd,
             };
 
-            let mut controls = MediaControls::new(config)?;
+            let mut controls =
+                MediaControls::new(config).map_err(|e| anyhow!("Souvlaki init error: {:?}", e))?;
             let tx = self.sender.clone();
-            controls.attach(move |event| {
-                let _ = tx.send(event);
-            })?;
+            controls
+                .attach(move |event| {
+                    let _ = tx.send(event);
+                })
+                .map_err(|e| anyhow!("Souvlaki attach error: {:?}", e))?;
 
             Ok(Some(controls))
         }
@@ -68,13 +71,15 @@ impl SmtcService {
         duration: Option<std::time::Duration>,
         cover_url: Option<&str>,
     ) -> Result<()> {
-        controls.set_metadata(MediaMetadata {
-            title: Some(title),
-            artist: Some(artist),
-            album,
-            duration,
-            cover_url,
-        })?;
+        controls
+            .set_metadata(MediaMetadata {
+                title: Some(title),
+                artist: Some(artist),
+                album,
+                duration,
+                cover_url,
+            })
+            .map_err(|e| anyhow!("Souvlaki set_metadata error: {:?}", e))?;
         Ok(())
     }
 }
