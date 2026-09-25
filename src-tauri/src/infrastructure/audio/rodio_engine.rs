@@ -15,17 +15,28 @@ pub struct AudioEngine {
 
 impl AudioEngine {
     pub fn new() -> Result<Self> {
-        let (stream, stream_handle) = OutputStream::try_default()
-            .map_err(|e| anyhow!("Failed to initialize audio output stream: {}", e))?;
-        let sink = Sink::try_new(&stream_handle)
-            .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
+        let (tx, rx) = std::sync::mpsc::channel();
 
-        std::thread::spawn(move || {
-            let _keep_alive = stream;
-            loop {
-                std::thread::park();
+        std::thread::spawn(move || match OutputStream::try_default() {
+            Ok((stream, stream_handle)) => {
+                let _ = tx.send(Ok(stream_handle));
+                let _keep_alive = stream;
+                loop {
+                    std::thread::park();
+                }
+            }
+            Err(e) => {
+                let _ = tx.send(Err(e));
             }
         });
+
+        let stream_handle = rx
+            .recv()
+            .map_err(|e| anyhow!("Audio worker thread panicked: {}", e))?
+            .map_err(|e| anyhow!("Failed to initialize audio output stream: {}", e))?;
+
+        let sink = Sink::try_new(&stream_handle)
+            .map_err(|e| anyhow!("Failed to create audio sink: {}", e))?;
 
         Ok(Self {
             stream_handle,
